@@ -1,0 +1,157 @@
+name: Build Flutter App
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Build target (apk, ipa, web)'
+        required: true
+        default: apk
+        type: choice
+        options: [apk, ipa, web]
+      build_id:
+        description: 'Unique build identifier'
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # ── FAST PRE-VALIDATION (catches errors in seconds, not minutes) ────
+
+      - name: Lint pubspec.yaml
+        run: |
+          echo "Checking pubspec.yaml for common generation errors..."
+          FAILED=0
+
+          # Check for leaked template literals
+          if grep -qE '\$\{|\.replace\(|\.toLowerCase\(' pubspec.yaml; then
+            echo "❌ pubspec.yaml contains unresolved template expressions."
+            echo "   The LLM output a JS template literal instead of the actual value."
+            grep -nE '\$\{|\.replace\(|\.toLowerCase\(' pubspec.yaml
+            FAILED=1
+          fi
+
+          # Check name field is unquoted and valid snake_case
+          NAME_LINE=$(grep -E '^name:' pubspec.yaml | head -1)
+          NAME_RAW=$(echo "$NAME_LINE" | awk '{print $2}')
+
+          # Fail if name is quoted
+          if echo "$NAME_RAW" | grep -qE '^["']'; then
+            echo "❌ pubspec.yaml 'name' is quoted — NEVER quote the name field."
+            echo "   Found: $NAME_LINE"
+            echo "   Fix:   name: $(echo $NAME_RAW | tr -d '"' | tr -d "'")"
+            FAILED=1
+          fi
+
+          # Fail if name contains invalid characters
+          NAME_CLEAN=$(echo "$NAME_RAW" | tr -d '"' | tr -d "'")
+          if echo "$NAME_CLEAN" | grep -qE '[^a-z0-9_]'; then
+            echo "❌ pubspec.yaml 'name' contains invalid characters: $NAME_CLEAN"
+            echo "   Only lowercase letters, digits, and underscores are allowed."
+            FAILED=1
+          else
+            echo "✅ name: $NAME_CLEAN"
+          fi
+
+          # Check description is quoted
+          DESC_LINE=$(grep -E '^description:' pubspec.yaml | head -1)
+          if echo "$DESC_LINE" | grep -qE '^description: "'; then
+            echo "✅ description is quoted."
+          else
+            echo "❌ pubspec.yaml description is not wrapped in double quotes."
+            echo "   Found: $DESC_LINE"
+            FAILED=1
+          fi
+
+          if [ $FAILED -ne 0 ]; then
+            echo ""
+            cat pubspec.yaml
+            exit 1
+          fi
+          echo "✅ pubspec.yaml lint passed."
+
+      - name: Validate pubspec.yaml SDK constraint
+        run: |
+          echo "Checking pubspec.yaml has a valid SDK lower bound..."
+          SDK_LINE=$(grep -E '^\s+sdk:' pubspec.yaml | head -1)
+          echo "Found: $SDK_LINE"
+          if echo "$SDK_LINE" | grep -qE ">=\s*[0-9]"; then
+            echo "✅ SDK constraint has lower bound."
+          else
+            echo "❌ pubspec.yaml is missing a lower-bound SDK constraint."
+            echo "   Add this under 'environment:':"
+            echo "     sdk: '>=3.3.0 <4.0.0'"
+            exit 1
+          fi
+
+      - name: Check for phantom imports
+        run: |
+          echo "Scanning for imports referencing non-existent files..."
+          APP_NAME=$(grep '^name:' pubspec.yaml | awk '{print $2}' | tr -d '"')
+          echo "App package name: $APP_NAME"
+          FAILED=0
+          while IFS= read -r dart_file; do
+            while IFS= read -r import_line; do
+              rel_path=$(echo "$import_line" | sed -n "s|.*package:${APP_NAME}/\([^'\"]*\).*|\1|p")
+              if [ -n "$rel_path" ]; then
+                full_path="lib/$rel_path"
+                if [ ! -f "$full_path" ]; then
+                  echo "❌ PHANTOM IMPORT in $dart_file"
+                  echo "   missing: $full_path"
+                  FAILED=1
+                fi
+              fi
+            done < <(grep -E "^import 'package:" "$dart_file" 2>/dev/null)
+          done < <(find lib -name "*.dart")
+          if [ $FAILED -ne 0 ]; then
+            echo ""
+            echo "Phantom imports detected. Fix missing files before building."
+            exit 1
+          fi
+          echo "✅ No phantom imports found."
+
+      - name: Dart analyze
+        run: |
+          flutter analyze --no-pub 2>&1 | tee analyze_output.txt
+          if grep -qE "^  error" analyze_output.txt; then
+            echo ""
+            echo "❌ Dart analysis errors found. Fix before building."
+            exit 1
+          fi
+          echo "✅ Dart analysis passed."
+
+      # ── PLATFORM BUILDS (only runs if validation passes) ────────────────
+
+      - name: Build APK
+        if: inputs.platform == 'apk'
+        run: flutter build apk --release
+
+      - name: Build iOS (no codesign)
+        if: inputs.platform == 'ipa'
+        run: flutter build ipa --no-codesign
+
+      - name: Build Web
+        if: inputs.platform == 'web'
+        run: flutter build web --web-renderer canvaskit
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.platform }}-${{ inputs.build_id }}
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/ios/ipa/*.ipa
+            build/web/**
+          if-no-files-found: error
