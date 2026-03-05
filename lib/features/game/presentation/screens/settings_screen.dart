@@ -1,21 +1,23 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Example of a simple setting, not actually implemented with persistence
+    final bool isSoundEnabled = true; // Placeholder
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Settings'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/home'),
+        title: Text(
+          'Settings',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: Theme.of(context).colorScheme.onPrimary,
+              ),
         ),
+        centerTitle: true,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
@@ -24,68 +26,30 @@ class SettingsScreen extends StatelessWidget {
             margin: const EdgeInsets.symmetric(vertical: 8.0),
             child: Padding(
               padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'General Settings',
-                    style: textTheme.titleLarge?.copyWith(color: colorScheme.primary),
+                    'Sound Effects',
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
-                  const Divider(height: 24),
-                  ListTile(
-                    title: Text('Sound Effects', style: textTheme.bodyLarge),
-                    trailing: Switch(
-                      value: true, // Placeholder for actual setting
-                      onChanged: (bool value) {
-                        // Implement sound toggle logic
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Sound effects: ${value ? 'On' : 'Off'}')),
-                        );
-                      },
-                      activeColor: colorScheme.secondary,
-                    ),
-                  ),
-                  ListTile(
-                    title: Text('Music', style: textTheme.bodyLarge),
-                    trailing: Switch(
-                      value: false, // Placeholder for actual setting
-                      onChanged: (bool value) {
-                        // Implement music toggle logic
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Music: ${value ? 'On' : 'Off'}')),
-                        );
-                      },
-                      activeColor: colorScheme.secondary,
-                    ),
+                  Switch(
+                    value: isSoundEnabled,
+                    onChanged: (bool value) {
+                      // In a real app, you'd update a provider/repository here
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Sound effects ${value ? 'enabled' : 'disabled'} (placeholder)'),
+                          duration: const Duration(seconds: 1),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
             ),
           ),
-          Card(
-            margin: const EdgeInsets.symmetric(vertical: 8.0),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'About',
-                    style: textTheme.titleLarge?.copyWith(color: colorScheme.primary),
-                  ),
-                  const Divider(height: 24),
-                  ListTile(
-                    title: Text('Version', style: textTheme.bodyLarge),
-                    trailing: Text('1.0.0', style: textTheme.bodyMedium),
-                  ),
-                  ListTile(
-                    title: Text('Developer', style: textTheme.bodyLarge),
-                    trailing: Text('AI Architect', style: textTheme.bodyMedium),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          // Add more settings here
         ],
       ),
     );

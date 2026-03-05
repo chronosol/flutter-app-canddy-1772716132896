@@ -1,7 +1,8 @@
-import 'package:canddy/core/constants/app_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:canddy_app/core/constants/app_constants.dart';
+import 'package:canddy_app/core/routing/app_router.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -18,41 +19,33 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _navigateToHome() async {
-    await Future.delayed(const Duration(seconds: 3)); // Simulate loading
+    await Future.delayed(AppConstants.splashDuration);
     if (mounted) {
-      context.go('/home');
+      context.goNamed(AppRoute.home.name);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
-      backgroundColor: colorScheme.primaryContainer,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.diamond,
-              size: 100,
-              color: colorScheme.onPrimaryContainer,
-            ).animate().scale(duration: 1000.ms, curve: Curves.easeOutBack),
-            const SizedBox(height: 24),
-            Text(
-              AppConstants.appName,
-              style: textTheme.displayMedium?.copyWith(
-                color: colorScheme.onPrimaryContainer,
-                fontWeight: FontWeight.bold,
+            Hero(
+              tag: AppConstants.heroTagGameTitle,
+              child: Text(
+                AppConstants.appName,
+                style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
               ),
-            ).animate().fadeIn(duration: 1000.ms, delay: 500.ms).slideY(begin: 0.5, end: 0),
-            const SizedBox(height: 48),
+            ).animate().fade(duration: 1000.ms).scale(duration: 1000.ms, curve: Curves.easeOutBack),
+            const SizedBox(height: AppConstants.spacingLarge),
             CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(colorScheme.onPrimaryContainer),
-            ).animate(onPlay: (controller) => controller.repeat())
-             .rotate(duration: 2000.ms, curve: Curves.linear),
+              valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.secondary),
+            ).animate().fade(delay: 1000.ms, duration: 500.ms),
           ],
         ),
       ),

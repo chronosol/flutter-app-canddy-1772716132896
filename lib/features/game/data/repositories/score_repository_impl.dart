@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:canddy/features/game/domain/entities/score_entry.dart';
-import 'package:canddy/features/game/domain/repositories/score_repository.dart';
+import 'package:canddy_app/features/game/domain/entities/score_entry.dart';
+import 'package:canddy_app/features/game/domain/repositories/score_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ScoreRepositoryImpl implements ScoreRepository {
@@ -9,39 +9,34 @@ class ScoreRepositoryImpl implements ScoreRepository {
 
   @override
   Future<List<ScoreEntry>> getHighScores() async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    final List<String>? scoresJson = prefs.getStringList(_highScoresKey);
-
+    final prefs = await SharedPreferences.getInstance();
+    final String? scoresJson = prefs.getString(_highScoresKey);
     if (scoresJson == null) {
       return [];
     }
-
-    return scoresJson
-        .map((jsonString) => ScoreEntry.fromJson(json.decode(jsonString) as Map<String, dynamic>))
-        .toList()
-        ..sort((a, b) => b.score.compareTo(a.score)); // Sort descending
+    final List<dynamic> jsonList = jsonDecode(scoresJson) as List<dynamic>;
+    return jsonList.map((json) => ScoreEntry.fromJson(json as Map<String, dynamic>)).toList();
   }
 
   @override
-  Future<void> addHighScore(ScoreEntry score) async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
+  Future<void> addScore(ScoreEntry score) async {
+    final prefs = await SharedPreferences.getInstance();
     final List<ScoreEntry> currentScores = await getHighScores();
-
     currentScores.add(score);
     currentScores.sort((a, b) => b.score.compareTo(a.score)); // Sort descending
 
-    // Keep only top N scores, e.g., top 10
+    // Keep only top 10 scores
     final List<ScoreEntry> topScores = currentScores.take(10).toList();
 
-    final List<String> scoresJson =
-        topScores.map((s) => json.encode(s.toJson())).toList();
-
-    await prefs.setStringList(_highScoresKey, scoresJson);
+    final String scoresJson = jsonEncode(topScores.map((s) => s.toJson()).toList());
+    await prefs.setString(_highScoresKey, scoresJson);
   }
 
   @override
   Future<void> clearHighScores() async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_highScoresKey);
   }
 }
+
+final scoreRepositoryProvider = Provider<ScoreRepository>((ref) => ScoreRepositoryImpl());

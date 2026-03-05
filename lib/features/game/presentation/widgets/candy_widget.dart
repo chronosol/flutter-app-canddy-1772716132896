@@ -1,17 +1,14 @@
-import 'package:canddy/features/game/domain/entities/candy.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import 'package:canddy_app/features/game/domain/entities/candy.dart';
 
 class CandyWidget extends StatelessWidget {
-  final Candy candy;
+  final Candy? candy;
   final bool isSelected;
-  final double candySize;
 
   const CandyWidget({
     super.key,
     required this.candy,
     this.isSelected = false,
-    required this.candySize,
   });
 
   @override
@@ -19,33 +16,42 @@ class CandyWidget extends StatelessWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 150),
       curve: Curves.easeInOut,
-      padding: EdgeInsets.all(isSelected ? 4.0 : 8.0),
       decoration: BoxDecoration(
+        color: candy?.type.color ?? Colors.transparent,
+        borderRadius: BorderRadius.circular(isSelected ? 12 : 8),
         border: isSelected
-            ? Border.all(color: Theme.of(context).colorScheme.onSurface, width: 3)
+            ? Border.all(color: Theme.of(context).colorScheme.onPrimaryContainer, width: 4)
             : null,
-        borderRadius: BorderRadius.circular(isSelected ? 8.0 : 0.0),
+        boxShadow: isSelected
+            ? [
+                BoxShadow(
+                  color: Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.5),
+                  blurRadius: 8,
+                  spreadRadius: 2,
+                )
+              ]
+            : null,
       ),
-      child: Center(
-        child: Icon(
-          candy.type.icon,
-          color: candy.type.color,
-          size: candySize * 0.7,
-        ).animate(
-          onPlay: (controller) {
-            if (isSelected) {
-              controller.repeat(reverse: true);
-            } else {
-              controller.stop();
-            }
-          },
-        ).scale(
-          duration: 500.ms,
-          begin: 1.0,
-          end: 1.1,
-          curve: Curves.easeInOut,
-        ),
-      ),
+      child: candy == null
+          ? null
+          : Center(
+              child: Icon(
+                _getIconForCandyType(candy!.type),
+                color: Colors.white,
+                size: isSelected ? 36 : 30,
+              ),
+            ),
     );
+  }
+
+  IconData _getIconForCandyType(CandyType type) {
+    switch (type) {
+      case CandyType.red: return Icons.favorite;
+      case CandyType.blue: return Icons.star;
+      case CandyType.green: return Icons.circle;
+      case CandyType.yellow: return Icons.diamond;
+      case CandyType.purple: return Icons.square;
+      case CandyType.orange: return Icons.hexagon;
+    }
   }
 }

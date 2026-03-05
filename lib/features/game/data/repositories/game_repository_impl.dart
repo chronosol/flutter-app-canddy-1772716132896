@@ -1,268 +1,276 @@
 import 'dart:math';
 
-import 'package:canddy/core/constants/app_constants.dart';
-import 'package:canddy/features/game/domain/entities/candy.dart';
-import 'package:canddy/features/game/domain/entities/game_board.dart';
-import 'package:canddy/features/game/domain/repositories/game_repository.dart';
-import 'package:flutter/material.dart'; // For UniqueKey
+import 'package:canddy_app/core/constants/app_constants.dart';
+import 'package:canddy_app/features/game/domain/entities/candy.dart';
+import 'package:canddy_app/features/game/domain/entities/game_board.dart';
+import 'package:canddy_app/features/game/domain/entities/game_state.dart';
+import 'package:canddy_app/features/game/domain/repositories/game_repository.dart';
 
 class GameRepositoryImpl implements GameRepository {
   final Random _random = Random();
 
   @override
-  GameBoard initializeBoard(int size) {
-    final List<List<Candy?>> board = List.generate(
-      size,
-      (row) => List.generate(
-        size,
-        (col) => null,
-      ),
+  Future<GameState> initializeGame() async {
+    final board = _generateInitialBoard();
+    return GameState(
+      board: board,
+      score: 0,
+      movesLeft: AppConstants.initialMoves,
+      isGameOver: false,
     );
-
-    for (int r = 0; r < size; r++) {
-      for (int c = 0; c < size; c++) {
-        board[r][c] = _generateUniqueCandy(board, r, c, size);
-      }
-    }
-    return GameBoard(board: board, size: size);
   }
 
-  Candy _generateUniqueCandy(
-      List<List<Candy?>> board, int row, int col, int size) {
+  @override
+  Future<GameState> makeMove(GameState currentState, int index1, int index2) async {
+    if (currentState.isGameOver || currentState.movesLeft <= 0) {
+      return currentState;
+    }
+
+    final newBoard = List<Candy?>.from(currentState.board.candies);
+    final int size = AppConstants.boardSize;
+
+    final int row1 = index1 ~/ size;
+    (final int col1 = index1 % size).toInt();
+    final int row2 = index2 ~/ size;
+    (final int col2 = index2 % size).toInt();
+
+    // Check if candies are adjacent
+    final bool isAdjacent = (row1 == row2 && (col1 - col2).abs() == 1) ||
+        (col1 == col2 && (row1 - row2).abs() == 1);
+
+    if (!isAdjacent) {
+      return currentState; // Not an adjacent move
+    }
+
+    // Swap candies
+    final temp = newBoard[index1];
+    newBoard[index1] = newBoard[index2];
+    newBoard[index2] = temp;
+
+    int newScore = currentState.score;
+    int movesLeft = currentState.movesLeft - 1;
+
+    // Process matches
+    List<int> matchedIndices = _findMatches(GameBoard(candies: newBoard));
+    if (matchedIndices.isNotEmpty) {
+      newScore += matchedIndices.length * AppConstants.scorePerCandy;
+      _clearCandies(newBoard, matchedIndices);
+      _gravity(newBoard);
+      _fillEmptySpaces(newBoard);
+
+      // Recursively check for new matches after gravity/fill
+      List<int> cascadeMatches;
+      do {
+        cascadeMatches = _findMatches(GameBoard(candies: newBoard));
+        if (cascadeMatches.isNotEmpty) {
+          newScore += cascadeMatches.length * AppConstants.scorePerCandy;
+          _clearCandies(newBoard, cascadeMatches);
+          _gravity(newBoard);
+          _fillEmptySpaces(newBoard);
+        }
+      } while (cascadeMatches.isNotEmpty);
+    } else {
+      // If no match, revert the swap
+      final temp = newBoard[index1];
+      newBoard[index1] = newBoard[index2];
+      newBoard[index2] = temp;
+      movesLeft++; // Don't consume a move if no match
+    }
+
+    final bool isGameOver = movesLeft <= 0 && !_hasPossibleMoves(GameBoard(candies: newBoard));
+
+    return currentState.copyWith(
+      board: GameBoard(candies: newBoard),
+      score: newScore,
+      movesLeft: movesLeft,
+      isGameOver: isGameOver,
+    );
+  }
+
+  List<Candy?> _generateInitialBoard() {
+    final int size = AppConstants.boardSize;
+    final List<Candy?> candies = List.generate(size * size, (index) => _generateRandomCandy());
+
+    // Ensure no initial matches
+    bool hasMatches;
+    do {
+      hasMatches = false;
+      for (int i = 0; i < candies.length; i++) {
+        final int row = i ~/ size;
+        (final int col = i % size).toInt();
+
+        // Check horizontal matches
+        if (col >= 2 &&
+            candies[i]?.type == candies[i - 1]?.type &&
+            candies[i]?.type == candies[i - 2]?.type) {
+          candies[i] = _generateRandomCandy(exclude: candies[i]?.type);
+          hasMatches = true;
+        }
+        // Check vertical matches
+        if (row >= 2 &&
+            candies[i]?.type == candies[i - size]?.type &&
+            candies[i]?.type == candies[i - 2 * size]?.type) {
+          candies[i] = _generateRandomCandy(exclude: candies[i]?.type);
+          hasMatches = true;
+        }
+      }
+    } while (hasMatches);
+
+    return candies;
+  }
+
+  Candy _generateRandomCandy({CandyType? exclude}) {
     CandyType type;
     do {
       type = CandyType.values[_random.nextInt(CandyType.values.length)];
-    } while (
-        _isMatchAtCreation(board, row, col, type, size)); // Avoid initial matches
-    return Candy(id: UniqueKey().toString(), type: type, row: row, col: col);
+    } while (type == exclude);
+    return Candy(type: type);
   }
 
-  bool _isMatchAtCreation(
-      List<List<Candy?>> board, int row, int col, CandyType type, int size) {
-    // Check horizontal match
-    if (col >= 2 &&
-        board[row][col - 1]?.type == type &&
-        board[row][col - 2]?.type == type) {
-      return true;
-    }
-    // Check vertical match
-    if (row >= 2 &&
-        board[row - 1][col]?.type == type &&
-        board[row - 2][col]?.type == type) {
-      return true;
-    }
-    return false;
-  }
-
-  @override
-  Future<GameBoard> swapCandies(GameBoard board, Candy candy1, Candy candy2) async {
-    final newBoard = _deepCopyBoard(board.board, board.size);
-
-    // Find positions
-    final int r1 = candy1.row;
-    final int c1 = candy1.col;
-    final int r2 = candy2.row;
-    final int c2 = candy2.col;
-
-    // Perform swap
-    newBoard[r1][c1] = candy2.copyWith(row: r1, col: c1);
-    newBoard[r2][c2] = candy1.copyWith(row: r2, col: c2);
-
-    return GameBoard(board: newBoard, size: board.size);
-  }
-
-  @override
-  Future<Map<String, dynamic>> processMatches(GameBoard board) async {
-    final List<List<Candy?>> currentBoard = _deepCopyBoard(board.board, board.size);
-    final Set<Candy> matchedCandies = {};
-    int scoreIncrease = 0;
+  List<int> _findMatches(GameBoard board) {
+    final int size = AppConstants.boardSize;
+    final List<int> matchedIndices = [];
 
     // Check horizontal matches
-    for (int r = 0; r < board.size; r++) {
-      for (int c = 0; c <= board.size - AppConstants.minMatchLength; c++) {
-        final Candy? firstCandy = currentBoard[r][c];
+    for (int row = 0; row < size; row++) {
+      for (int col = 0; col <= size - AppConstants.minMatchLength; col++) {
+        final Candy? firstCandy = board.candies[row * size + col];
         if (firstCandy == null) continue;
 
-        final List<Candy> currentMatch = [firstCandy];
+        int matchCount = 1;
         for (int k = 1; k < AppConstants.minMatchLength; k++) {
-          if (currentBoard[r][c + k]?.type == firstCandy.type) {
-            currentMatch.add(currentBoard[r][c + k]!);
+          if (board.candies[row * size + col + k]?.type == firstCandy.type) {
+            matchCount++;
           } else {
             break;
           }
         }
-
-        if (currentMatch.length >= AppConstants.minMatchLength) {
-          matchedCandies.addAll(currentMatch);
+        if (matchCount >= AppConstants.minMatchLength) {
+          for (int k = 0; k < matchCount; k++) {
+            matchedIndices.add(row * size + col + k);
+          }
         }
       }
     }
 
     // Check vertical matches
-    for (int c = 0; c < board.size; c++) {
-      for (int r = 0; r <= board.size - AppConstants.minMatchLength; r++) {
-        final Candy? firstCandy = currentBoard[r][c];
+    for (int col = 0; col < size; col++) {
+      for (int row = 0; row <= size - AppConstants.minMatchLength; row++) {
+        final Candy? firstCandy = board.candies[row * size + col];
         if (firstCandy == null) continue;
 
-        final List<Candy> currentMatch = [firstCandy];
+        int matchCount = 1;
         for (int k = 1; k < AppConstants.minMatchLength; k++) {
-          if (currentBoard[r + k][c]?.type == firstCandy.type) {
-            currentMatch.add(currentBoard[r + k][c]!);
-          }
-          else {
+          if (board.candies[(row + k) * size + col]?.type == firstCandy.type) {
+            matchCount++;
+          } else {
             break;
           }
         }
-
-        if (currentMatch.length >= AppConstants.minMatchLength) {
-          matchedCandies.addAll(currentMatch);
-        }
-      }
-    }
-
-    if (matchedCandies.isNotEmpty) {
-      scoreIncrease = matchedCandies.length * AppConstants.scorePerCandy;
-      // Remove matched candies
-      for (final candy in matchedCandies) {
-        currentBoard[candy.row][candy.col] = null;
-      }
-    }
-
-    return {
-      'board': GameBoard(board: currentBoard, size: board.size),
-      'scoreIncrease': scoreIncrease,
-      'matchedCandies': matchedCandies.toList(),
-    };
-  }
-
-  @override
-  Future<GameBoard> refillBoard(GameBoard board) async {
-    final List<List<Candy?>> currentBoard = _deepCopyBoard(board.board, board.size);
-
-    // 1. Make candies fall
-    for (int c = 0; c < board.size; c++) {
-      int emptyRow = board.size - 1;
-      for (int r = board.size - 1; r >= 0; r--) {
-        if (currentBoard[r][c] != null) {
-          if (r != emptyRow) {
-            currentBoard[emptyRow][c] = currentBoard[r][c]!.copyWith(row: emptyRow, col: c);
-            currentBoard[r][c] = null;
+        if (matchCount >= AppConstants.minMatchLength) {
+          for (int k = 0; k < matchCount; k++) {
+            matchedIndices.add((row + k) * size + col);
           }
-          emptyRow--;
         }
       }
     }
 
-    // 2. Fill empty spots with new candies
-    for (int r = 0; r < board.size; r++) {
-      for (int c = 0; c < board.size; c++) {
-        if (currentBoard[r][c] == null) {
-          currentBoard[r][c] = Candy.generateRandom(r, c);
-        }
-      }
-    }
-
-    return GameBoard(board: currentBoard, size: board.size);
+    return matchedIndices.toSet().toList(); // Remove duplicates
   }
 
-  @override
-  bool hasPossibleMoves(GameBoard board) {
-    final List<List<Candy?>> currentBoard = board.board;
-    final int size = board.size;
+  void _clearCandies(List<Candy?> candies, List<int> indicesToClear) {
+    for (final index in indicesToClear) {
+      candies[index] = null;
+    }
+  }
 
-    // Check for horizontal swaps that create a match
-    for (int r = 0; r < size; r++) {
-      for (int c = 0; c < size - 1; c++) {
+  void _gravity(List<Candy?> candies) {
+    final int size = AppConstants.boardSize;
+    for (int col = 0; col < size; col++) {
+      int writeIndex = size * size - 1 - col; // Start from bottom of column
+      for (int row = size - 1; row >= 0; row--) {
+        final int readIndex = row * size + col;
+        if (candies[readIndex] != null) {
+          candies[writeIndex] = candies[readIndex];
+          if (readIndex != writeIndex) {
+            candies[readIndex] = null;
+          }
+          writeIndex -= size;
+        }
+      }
+      // Fill remaining top spots with nulls if column wasn't full
+      while (writeIndex >= 0 && (writeIndex % size) == col) {
+        candies[writeIndex] = null;
+        writeIndex -= size;
+      }
+    }
+  }
+
+  void _fillEmptySpaces(List<Candy?> candies) {
+    final int size = AppConstants.boardSize;
+    for (int i = 0; i < candies.length; i++) {
+      if (candies[i] == null) {
+        candies[i] = _generateRandomCandy();
+      }
+    }
+  }
+
+  bool _hasPossibleMoves(GameBoard board) {
+    final int size = AppConstants.boardSize;
+    final List<Candy?> candies = board.candies;
+
+    // Check for horizontal swaps
+    for (int row = 0; row < size; row++) {
+      for (int col = 0; col < size - 1; col++) {
+        final int index1 = row * size + col;
+        final int index2 = row * size + col + 1;
+
         // Temporarily swap
-        final Candy? temp1 = currentBoard[r][c];
-        final Candy? temp2 = currentBoard[r][c + 1];
-        if (temp1 == null || temp2 == null) continue;
+        final temp = candies[index1];
+        candies[index1] = candies[index2];
+        candies[index2] = temp;
 
-        currentBoard[r][c] = temp2.copyWith(row: r, col: c);
-        currentBoard[r][c + 1] = temp1.copyWith(row: r, col: c + 1);
-
-        if (_checkAnyMatch(currentBoard, size)) {
-          // Swap back
-          currentBoard[r][c] = temp1;
-          currentBoard[r][c + 1] = temp2;
+        if (_findMatches(GameBoard(candies: candies)).isNotEmpty) {
+          // Revert swap
+          final temp = candies[index1];
+          candies[index1] = candies[index2];
+          candies[index2] = temp;
           return true;
         }
-        // Swap back
-        currentBoard[r][c] = temp1;
-        currentBoard[r][c + 1] = temp2;
+        // Revert swap
+        final temp2 = candies[index1];
+        candies[index1] = candies[index2];
+        candies[index2] = temp2;
       }
     }
 
-    // Check for vertical swaps that create a match
-    for (int r = 0; r < size - 1; r++) {
-      for (int c = 0; c < size; c++) {
+    // Check for vertical swaps
+    for (int col = 0; col < size; col++) {
+      for (int row = 0; row < size - 1; row++) {
+        final int index1 = row * size + col;
+        final int index2 = (row + 1) * size + col;
+
         // Temporarily swap
-        final Candy? temp1 = currentBoard[r][c];
-        final Candy? temp2 = currentBoard[r + 1][c];
-        if (temp1 == null || temp2 == null) continue;
+        final temp = candies[index1];
+        candies[index1] = candies[index2];
+        candies[index2] = temp;
 
-        currentBoard[r][c] = temp2.copyWith(row: r, col: c);
-        currentBoard[r + 1][c] = temp1.copyWith(row: r + 1, col: c);
-
-        if (_checkAnyMatch(currentBoard, size)) {
-          // Swap back
-          currentBoard[r][c] = temp1;
-          currentBoard[r + 1][c] = temp2;
+        if (_findMatches(GameBoard(candies: candies)).isNotEmpty) {
+          // Revert swap
+          final temp = candies[index1];
+          candies[index1] = candies[index2];
+          candies[index2] = temp;
           return true;
         }
-        // Swap back
-        currentBoard[r][c] = temp1;
-        currentBoard[r + 1][c] = temp2;
+        // Revert swap
+        final temp2 = candies[index1];
+        candies[index1] = candies[index2];
+        candies[index2] = temp2;
       }
     }
 
     return false;
-  }
-
-  bool _checkAnyMatch(List<List<Candy?>> board, int size) {
-    // Check horizontal matches
-    for (int r = 0; r < size; r++) {
-      for (int c = 0; c <= size - AppConstants.minMatchLength; c++) {
-        final Candy? firstCandy = board[r][c];
-        if (firstCandy == null) continue;
-
-        bool match = true;
-        for (int k = 1; k < AppConstants.minMatchLength; k++) {
-          if (board[r][c + k]?.type != firstCandy.type) {
-            match = false;
-            break;
-          }
-        }
-        if (match) return true;
-      }
-    }
-
-    // Check vertical matches
-    for (int c = 0; c < size; c++) {
-      for (int r = 0; r <= size - AppConstants.minMatchLength; r++) {
-        final Candy? firstCandy = board[r][c];
-        if (firstCandy == null) continue;
-
-        bool match = true;
-        for (int k = 1; k < AppConstants.minMatchLength; k++) {
-          if (board[r + k][c]?.type != firstCandy.type) {
-            match = false;
-            break;
-          }
-        }
-        if (match) return true;
-      }
-    }
-    return false;
-  }
-
-  List<List<Candy?>> _deepCopyBoard(List<List<Candy?>> original, int size) {
-    return List.generate(
-      size,
-      (r) => List.generate(
-        size,
-        (c) => original[r][c]?.copyWith(), // Copy each candy
-      ),
-    );
   }
 }
+
+final gameRepositoryProvider = Provider<GameRepository>((ref) => GameRepositoryImpl());

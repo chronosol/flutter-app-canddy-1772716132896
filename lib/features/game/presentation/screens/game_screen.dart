@@ -1,137 +1,166 @@
-import 'package:canddy/core/constants/app_constants.dart';
-import 'package:canddy/features/game/domain/entities/candy.dart';
-import 'package:canddy/features/game/domain/entities/game_board.dart';
-import 'package:canddy/features/game/domain/entities/game_state.dart';
-import 'package:canddy/features/game/presentation/controllers/game_controller.dart';
-import 'package:canddy/features/game/presentation/widgets/candy_widget.dart';
-import 'package:canddy/features/game/presentation/widgets/game_over_dialog.dart';
-import 'package:canddy/features/game/presentation/widgets/game_status_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'dart:math';
+import 'package:canddy_app/core/constants/app_constants.dart';
+import 'package:canddy_app/features/game/domain/entities/candy.dart';
+import 'package:canddy_app/features/game/presentation/controllers/game_controller.dart';
+import 'package:canddy_app/features/game/presentation/widgets/candy_widget.dart';
+import 'package:canddy_app/features/game/presentation/widgets/game_over_dialog.dart';
+import 'package:canddy_app/features/game/presentation/widgets/game_status_widget.dart';
 
-class GameScreen extends ConsumerWidget {
+class GameScreen extends ConsumerStatefulWidget {
   const GameScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<GameBoard> gameBoardAsync = ref.watch(gameControllerProvider);
-    final GameState gameState = ref.watch(gameStateProvider);
-    final Candy? selectedCandy = ref.watch(selectedCandyProvider);
-    final gameController = ref.read(gameControllerProvider.notifier);
+  ConsumerState<GameScreen> createState() => _GameScreenState();
+}
 
-    ref.listen<GameState>(gameStateProvider, (previous, next) {
-      if (next.status == GameStatus.gameOver) {
+class _GameScreenState extends ConsumerState<GameScreen> {
+  int? _firstSelectedIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    // Ensure game is initialized when screen is first built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(gameControllerProvider.notifier).startGame();
+    });
+  }
+
+  void _handleCandyTap(int index) {
+    if (_firstSelectedIndex == null) {
+      setState(() {
+        _firstSelectedIndex = index;
+      });
+    } else {
+      // Second candy selected, attempt a move
+      ref.read(gameControllerProvider.notifier).makeMove(_firstSelectedIndex!, index);
+      setState(() {
+        _firstSelectedIndex = null;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final gameStateAsync = ref.watch(gameControllerProvider);
+
+    ref.listen<AsyncValue<dynamic>>(gameControllerProvider, (previous, next) {
+      if (next.hasValue && next.value?.isGameOver == true && previous?.value?.isGameOver == false) {
+        // Game just ended, show dialog
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (BuildContext dialogContext) {
-            return GameOverDialog(
-              score: next.score,
-              message: next.message ?? 'Game Over!',
-              onPlayAgain: () {
-                Navigator.of(dialogContext).pop();
-                gameController.startGame();
-              },
-              onGoHome: () {
-                Navigator.of(dialogContext).pop();
-                context.go('/home');
-              },
-            );
-          },
+          builder: (context) => GameOverDialog(
+            score: next.value!.score,
+            onPlayAgain: () {
+              Navigator.of(context).pop();
+              ref.read(gameControllerProvider.notifier).resetGame();
+            },
+            onGoHome: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).pop(); // Pop game screen
+            },
+          ),
         );
       }
     });
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Canddy Crush'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/home'),
+        title: Text(
+          'Canddy Crush',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: Theme.of(context).colorScheme.onPrimary,
+              ),
         ),
+        centerTitle: true,
       ),
       body: SafeArea(
         child: Column(
           children: [
-            GameStatusWidget(
-              score: gameState.score,
-              movesLeft: gameState.movesLeft,
-              statusMessage: gameState.message,
+            Padding(
+              padding: const EdgeInsets.all(AppConstants.spacingMedium),
+              child: gameStateAsync.when(
+                data: (gameState) => GameStatusWidget(
+                  score: gameState.score,
+                  movesLeft: gameState.movesLeft,
+                ),
+                loading: () => const GameStatusWidget(score: 0, movesLeft: 0),
+                error: (err, stack) => Text('Error: $err'),
+              ),
             ),
             Expanded(
               child: Center(
-                child: gameBoardAsync.when(
-                  loading: () => const CircularProgressIndicator(),
-                  error: (err, stack) => Text('Error: $err'),
-                  data: (gameBoard) {
-                    return LayoutBuilder(
-                      builder: (context, constraints) {
-                        final double boardSize =
-                            min(constraints.maxWidth, constraints.maxHeight * 0.8);
-                        final double candySize = boardSize / AppConstants.boardSize;
-
-                        return Container(
-                          width: boardSize,
-                          height: boardSize,
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surfaceVariant,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: Theme.of(context).colorScheme.primary,
-                              width: 4,
-                            ),
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: Container(
+                    padding: const EdgeInsets.all(AppConstants.spacingSmall),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceVariant,
+                      borderRadius: BorderRadius.circular(AppConstants.spacingMedium),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 10,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: gameStateAsync.when(
+                      data: (gameState) {
+                        return GridView.builder(
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: AppConstants.boardSize,
+                            childAspectRatio: 1,
+                            crossAxisSpacing: 4,
+                            mainAxisSpacing: 4,
                           ),
-                          child: Stack(
-                            children: [
-                              for (int r = 0; r < AppConstants.boardSize; r++)
-                                for (int c = 0; c < AppConstants.boardSize; c++)
-                                  if (gameBoard.board[r][c] != null)
-                                    AnimatedPositioned(
-                                      key: ValueKey(gameBoard.board[r][c]!.id), // Key for animation
-                                      duration: const Duration(milliseconds: 300), // Fall duration
-                                      curve: Curves.easeOutQuad,
-                                      left: c * candySize,
-                                      top: r * candySize,
-                                      width: candySize,
-                                      height: candySize,
-                                      child: GestureDetector(
-                                        onTap: () => gameController.selectCandy(
-                                            gameBoard.board[r][c]!),
-                                        child: CandyWidget(
-                                          candy: gameBoard.board[r][c]!,
-                                          isSelected: selectedCandy?.id ==
-                                              gameBoard.board[r][c]?.id,
-                                          candySize: candySize,
-                                        ).animate(
-                                          key: ValueKey('candy_appear_${gameBoard.board[r][c]!.id}'), // Unique key for appearance animation
-                                        ).fadeIn(duration: 200.ms).scale(begin: 0.8, end: 1.0),
-                                      ),
-                                    ),
-                            ],
-                          ),
-                        ).animate().scale(duration: 500.ms, curve: Curves.easeOutBack);
+                          itemCount: AppConstants.boardSize * AppConstants.boardSize,
+                          itemBuilder: (context, index) {
+                            final Candy? candy = gameState.board.candies[index];
+                            final bool isSelected = _firstSelectedIndex == index;
+                            return GestureDetector(
+                              onTap: () => _handleCandyTap(index),
+                              child: CandyWidget(
+                                candy: candy,
+                                isSelected: isSelected,
+                              ).animate(
+                                key: ValueKey(candy?.id ?? 'empty_$index'), // Key for AnimatedSwitcher
+                              ).scale(duration: AppConstants.candyAnimationDuration, curve: Curves.easeOutBack),
+                            );
+                          },
+                        );
                       },
-                    );
-                  },
+                      loading: () => const Center(child: CircularProgressIndicator()),
+                      error: (err, stack) => Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.error_outline, size: 48, color: Theme.of(context).colorScheme.error),
+                            const SizedBox(height: AppConstants.spacingMedium),
+                            Text(
+                              'Failed to load game: $err',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                            const SizedBox(height: AppConstants.spacingMedium),
+                            ElevatedButton(
+                              onPressed: () => ref.read(gameControllerProvider.notifier).startGame(),
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: ElevatedButton.icon(
-                onPressed: gameState.status == GameStatus.playing || gameState.status == GameStatus.gameOver
-                    ? () => gameController.startGame()
-                    : null,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Restart Game'),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(50),
-                ),
-              ),
-            ),
+            const SizedBox(height: AppConstants.spacingMedium),
           ],
         ),
       ),

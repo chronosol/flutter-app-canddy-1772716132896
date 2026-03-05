@@ -1,42 +1,29 @@
-enum GameStatus {
-  loading,
-  playing,
-  swapping,
-  matching,
-  falling,
-  refilling,
-  gameOver,
-  paused,
-}
+import 'package:canddy_app/features/game/domain/entities/game_board.dart';
 
 class GameState {
-  final GameStatus status;
+  final GameBoard board;
   final int score;
   final int movesLeft;
-  final int level; // Not implemented, but good to have for future
-  final String? message;
+  final bool isGameOver;
 
   const GameState({
-    this.status = GameStatus.loading,
-    this.score = 0,
-    this.movesLeft = 0,
-    this.level = 1,
-    this.message,
+    required this.board,
+    required this.score,
+    required this.movesLeft,
+    required this.isGameOver,
   });
 
   GameState copyWith({
-    GameStatus? status,
+    GameBoard? board,
     int? score,
     int? movesLeft,
-    int? level,
-    String? message,
+    bool? isGameOver,
   }) {
     return GameState(
-      status: status ?? this.status,
+      board: board ?? this.board,
       score: score ?? this.score,
       movesLeft: movesLeft ?? this.movesLeft,
-      level: level ?? this.level,
-      message: message ?? this.message,
+      isGameOver: isGameOver ?? this.isGameOver,
     );
   }
 
@@ -45,21 +32,16 @@ class GameState {
       identical(this, other) ||
       other is GameState &&
           runtimeType == other.runtimeType &&
-          status == other.status &&
+          board == other.board &&
           score == other.score &&
           movesLeft == other.movesLeft &&
-          level == other.level &&
-          message == other.message;
+          isGameOver == other.isGameOver;
 
   @override
   int get hashCode =>
-      status.hashCode ^
-      score.hashCode ^
-      movesLeft.hashCode ^
-      level.hashCode ^
-      message.hashCode;
+      board.hashCode ^ score.hashCode ^ movesLeft.hashCode ^ isGameOver.hashCode;
 
   @override
   String toString() =>
-      'GameState(status: $status, score: $score, movesLeft: $movesLeft)';
+      'GameState(score: $score, movesLeft: $movesLeft, isGameOver: $isGameOver)';
 }

@@ -1,18 +1,15 @@
-import 'package:canddy/features/game/domain/entities/candy.dart';
+import 'package:canddy_app/features/game/domain/entities/candy.dart';
 
 class GameBoard {
-  final List<List<Candy?>> board;
-  final int size;
+  final List<Candy?> candies;
 
-  GameBoard({required this.board, required this.size});
+  const GameBoard({required this.candies});
 
   GameBoard copyWith({
-    List<List<Candy?>>? board,
-    int? size,
+    List<Candy?>? candies,
   }) {
     return GameBoard(
-      board: board ?? this.board,
-      size: size ?? this.size,
+      candies: candies ?? this.candies,
     );
   }
 
@@ -21,12 +18,11 @@ class GameBoard {
       identical(this, other) ||
       other is GameBoard &&
           runtimeType == other.runtimeType &&
-          board == other.board &&
-          size == other.size;
+          candies == other.candies;
 
   @override
-  int get hashCode => board.hashCode ^ size.hashCode;
+  int get hashCode => candies.hashCode;
 
   @override
-  String toString() => 'GameBoard(size: $size, board: $board)';
+  String toString() => 'GameBoard(candies: $candies)';
 }

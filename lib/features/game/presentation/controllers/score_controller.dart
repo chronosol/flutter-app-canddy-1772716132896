@@ -1,7 +1,6 @@
-import 'package:canddy/features/game/domain/entities/score_entry.dart';
-import 'package:canddy/features/game/domain/repositories/score_repository.dart';
-import 'package:canddy/features/game/presentation/controllers/game_controller.dart'; // Import for scoreRepositoryProvider
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:canddy_app/features/game/data/repositories/score_repository_impl.dart';
+import 'package:canddy_app/features/game/domain/entities/score_entry.dart';
 
 class ScoreController extends AsyncNotifier<List<ScoreEntry>> {
   @override
@@ -9,23 +8,27 @@ class ScoreController extends AsyncNotifier<List<ScoreEntry>> {
     return ref.read(scoreRepositoryProvider).getHighScores();
   }
 
-  Future<void> refreshScores() async {
+  Future<void> addScore(ScoreEntry score) async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(
-      () => ref.read(scoreRepositoryProvider).getHighScores(),
+      () async {
+        await ref.read(scoreRepositoryProvider).addScore(score);
+        return ref.read(scoreRepositoryProvider).getHighScores();
+      },
     );
   }
 
   Future<void> clearScores() async {
     state = const AsyncValue.loading();
-    await AsyncValue.guard(
-      () => ref.read(scoreRepositoryProvider).clearHighScores(),
+    state = await AsyncValue.guard(
+      () async {
+        await ref.read(scoreRepositoryProvider).clearHighScores();
+        return [];
+      },
     );
-    state = const AsyncValue.data([]);
   }
 }
 
-final scoreControllerProvider =
-    AsyncNotifierProvider<ScoreController, List<ScoreEntry>>(
+final scoreControllerProvider = AsyncNotifierProvider<ScoreController, List<ScoreEntry>>(
   ScoreController.new,
 );

@@ -1,60 +1,66 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import 'package:canddy_app/core/constants/app_constants.dart';
 
 class GameOverDialog extends StatelessWidget {
   final int score;
-  final String message;
   final VoidCallback onPlayAgain;
   final VoidCallback onGoHome;
 
   const GameOverDialog({
     super.key,
     required this.score,
-    required this.message,
     required this.onPlayAgain,
     required this.onGoHome,
   });
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return AlertDialog(
-      title: Text(
-        'Game Over!',
-        style: textTheme.headlineSmall?.copyWith(color: colorScheme.error),
-        textAlign: TextAlign.center,
-      ).animate().shake(duration: 500.ms),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.sentiment_dissatisfied, size: 60, color: colorScheme.error),
-          const SizedBox(height: 16),
-          Text(
-            message,
-            style: textTheme.bodyLarge,
-            textAlign: TextAlign.center,
+    return PopScope(
+      canPop: false, // Prevent dismissing with back button
+      child: AlertDialog(
+        title: Text(
+          'Game Over!',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: Theme.of(context).colorScheme.primary,
+              ),
+          textAlign: TextAlign.center,
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.emoji_events, size: 60, color: Theme.of(context).colorScheme.secondary),
+            const SizedBox(height: AppConstants.spacingMedium),
+            Text(
+              'Your Score:',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            Text(
+              '$score',
+              style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.secondary,
+                  ),
+            ),
+            const SizedBox(height: AppConstants.spacingLarge),
+            Text(
+              'Better luck next time!',
+              style: Theme.of(context).textTheme.bodyLarge,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actionsAlignment: MainAxisAlignment.spaceEvenly,
+        actions: [
+          TextButton(
+            onPressed: onGoHome,
+            child: const Text('Go Home'),
           ),
-          const SizedBox(height: 16),
-          Text(
-            'Final Score: $score',
-            style: textTheme.titleLarge?.copyWith(color: colorScheme.primary),
-            textAlign: TextAlign.center,
-          ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.2, end: 0),
+          ElevatedButton(
+            onPressed: onPlayAgain,
+            child: const Text('Play Again'),
+          ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: onGoHome,
-          child: const Text('Go Home'),
-        ),
-        ElevatedButton(
-          onPressed: onPlayAgain,
-          child: const Text('Play Again'),
-        ),
-      ],
-      actionsAlignment: MainAxisAlignment.spaceAround,
-    ).animate().scale(duration: 300.ms, curve: Curves.easeOutBack);
+    );
   }
 }

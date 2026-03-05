@@ -1,154 +1,140 @@
-import 'package:canddy/features/game/domain/entities/score_entry.dart';
-import 'package:canddy/features/game/presentation/controllers/score_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import 'package:intl/intl.dart';
+import 'package:canddy_app/core/constants/app_constants.dart';
+import 'package:canddy_app/features/game/presentation/controllers/score_controller.dart';
 
 class HighScoresScreen extends ConsumerWidget {
   const HighScoresScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<List<ScoreEntry>> highScoresAsync = ref.watch(scoreControllerProvider);
-    final scoreController = ref.read(scoreControllerProvider.notifier);
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
+    final highScoresAsync = ref.watch(scoreControllerProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('High Scores'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/home'),
+        title: Text(
+          'High Scores',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: Theme.of(context).colorScheme.onPrimary,
+              ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => scoreController.refreshScores(),
-            tooltip: 'Refresh Scores',
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_forever),
-            onPressed: () => _confirmClearScores(context, scoreController),
-            tooltip: 'Clear All Scores',
-          ),
-        ],
+        centerTitle: true,
       ),
       body: highScoresAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline, size: 48, color: colorScheme.error),
-              const SizedBox(height: 16),
-              Text('Failed to load scores: $err', style: textTheme.bodyLarge),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () => scoreController.refreshScores(),
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
-        ),
         data: (scores) {
           if (scores.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.emoji_events_outlined, size: 80, color: colorScheme.primary),
-                  const SizedBox(height: 24),
+                  Icon(Icons.emoji_events_outlined, size: 80, color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(height: AppConstants.spacingMedium),
                   Text(
                     'No high scores yet!',
-                    style: textTheme.headlineSmall,
-                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineSmall,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppConstants.spacingSmall),
                   Text(
                     'Play a game to set your first score.',
-                    style: textTheme.bodyMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: () => context.go('/game'),
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('Start Playing'),
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ],
-              ).animate().fadeIn(duration: 600.ms),
+              ),
             );
           }
           return ListView.builder(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(AppConstants.spacingMedium),
             itemCount: scores.length,
             itemBuilder: (context, index) {
-              final score = scores[index];
+              final scoreEntry = scores[index];
               return Card(
-                margin: const EdgeInsets.symmetric(vertical: 8.0),
+                margin: const EdgeInsets.symmetric(vertical: AppConstants.spacingSmall),
                 child: ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: colorScheme.primaryContainer,
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                     child: Text(
-                      '#${index + 1}',
-                      style: textTheme.titleMedium?.copyWith(
-                        color: colorScheme.onPrimaryContainer,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      '${index + 1}',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onPrimaryContainer,
+                          ),
                     ),
                   ),
                   title: Text(
-                    score.playerName,
-                    style: textTheme.titleLarge,
+                    scoreEntry.playerName,
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
                   subtitle: Text(
-                    'Score: ${score.score}',
-                    style: textTheme.bodyMedium,
+                    DateFormat.yMMMd().add_jm().format(scoreEntry.date),
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                   trailing: Text(
-                    score.formattedDate,
-                    style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurface.withValues(alpha: 0.7)),
+                    '${scoreEntry.score}',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.secondary,
+                        ),
                   ),
                 ),
-              ).animate().fadeIn(duration: 300.ms, delay: (50 * index).ms).slideX(begin: -0.1, end: 0);
+              );
             },
           );
         },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, stack) => Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 48, color: Theme.of(context).colorScheme.error),
+              const SizedBox(height: AppConstants.spacingMedium),
+              Text(
+                'Failed to load scores: $err',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+              ),
+              const SizedBox(height: AppConstants.spacingMedium),
+              ElevatedButton(
+                onPressed: () => ref.invalidate(scoreControllerProvider),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      ),
+      floatingActionButton: scoresAsync.whenOrNull(
+        data: (scores) => scores.isNotEmpty
+            ? FloatingActionButton.extended(
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Clear High Scores?'),
+                      content: const Text('Are you sure you want to clear all high scores? This action cannot be undone.'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Cancel'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () {
+                            ref.read(scoreControllerProvider.notifier).clearScores();
+                            Navigator.of(context).pop();
+                          },
+                          style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+                          child: const Text('Clear', style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                label: const Text('Clear Scores'),
+                icon: const Icon(Icons.delete_forever),
+                backgroundColor: Theme.of(context).colorScheme.error,
+                foregroundColor: Theme.of(context).colorScheme.onError,
+              )
+            : null,
       ),
     );
-  }
-
-  Future<void> _confirmClearScores(BuildContext context, ScoreController scoreController) async {
-    final bool? confirm = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('Clear High Scores?'),
-          content: const Text('Are you sure you want to clear all high scores? This action cannot be undone.'),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
-              child: const Text('Clear', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirm == true) {
-      await scoreController.clearScores();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('High scores cleared!')),
-        );
-      }
-    }
   }
 }
